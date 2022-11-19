@@ -2,7 +2,6 @@ package gonuts
 
 import (
 	"crypto/rsa"
-	"io/ioutil"
 	"os"
 
 	"github.com/golang-jwt/jwt"
@@ -29,7 +28,7 @@ func InitSecrets() {
 }
 
 func ReadFilePrivateKey(filepath string) *rsa.PrivateKey {
-	signBytes, err := ioutil.ReadFile(filepath)
+	signBytes, err := os.ReadFile(filepath)
 	if err != nil {
 		L.Errorf("[nuts.ReadFilePrivateKey] FATAL ERROR-> %s", err)
 		panic(err)
@@ -45,7 +44,7 @@ func ReadFilePrivateKey(filepath string) *rsa.PrivateKey {
 }
 
 func ReadFilePublicKey(filepath string) *rsa.PublicKey {
-	signBytes, err := ioutil.ReadFile(filepath)
+	signBytes, err := os.ReadFile(filepath)
 	if err != nil {
 		L.Errorf("[nuts.ReadFilePublicKey] FATAL ERROR-> %s", err)
 		panic(err)

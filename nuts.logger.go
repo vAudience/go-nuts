@@ -73,6 +73,6 @@ func GetPrettyJson(object any) (pretty string) {
 	}
 	var prettyJSON bytes.Buffer
 	json.Indent(&prettyJSON, jsonBytes, "", "\t")
-	pretty = string(prettyJSON.Bytes())
+	pretty = prettyJSON.String()
 	return pretty
 }
