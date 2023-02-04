@@ -18,6 +18,7 @@ machine github.com login USERNAME password PERSONAL-ACCESS-TOKEN
 
 ## VERSIONS
 
+* 0.1.3 updated Interval for the ability to cancel. this changed the call-function type to expecting a returned bool - will break things!
 * 0.1.2 added sanitizer func. not really safe! use with caution.
 * 0.1.1 updated the ids lib. added the NID() function for more control. updated go dep to 1.19. replaced ioutil.
 * 0.1.0 initial isolated version of the nuts package.
