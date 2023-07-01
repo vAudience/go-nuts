@@ -1,5 +1,7 @@
 package gonuts
 
+import "sort"
+
 func StringSliceContains(s []string, e string) bool {
 	for _, a := range s {
 		if a == e {
@@ -28,6 +30,7 @@ func StringSliceRemoveString(max int, sourceSlice []string, stringToRemove strin
 			found = append(found, i)
 		}
 	}
+	sort.Sort(sort.Reverse(sort.IntSlice(found)))
 	var resultSlice []string = sourceSlice
 	for _, idx := range found {
 		if max == -1 || max > 0 {
