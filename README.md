@@ -18,6 +18,7 @@ machine github.com login USERNAME password PERSONAL-ACCESS-TOKEN
 
 ## VERSIONS
 
+* v0.1.6 added FilterStructFields
 * v0.1.5 added CopyFields in nuts.structfieldcopy.go. this is meant to be used to filter structs based on access rights.
 * v0.1.4 moved to go 1.20 . fixed internal usage of the updated interval. added time coversion helpers for javascript timestamps (Date.now) . added SelectJsonFields and adapted RemoveJsonFields. this will break old usage!
 * v0.1.3 updated Interval for the ability to cancel. this changed the call-function type to expecting a returned bool - will break things!
