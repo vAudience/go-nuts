@@ -137,7 +137,17 @@ func fieldHasTagsValues(field reflect.StructField, tagsValuesToKeep map[string][
 func fieldHasTagValue(field reflect.StructField, tag string, value string) bool {
 	tagValue := field.Tag.Get(tag)
 	if tagValue == "" {
-		return false
+		if value == "" {
+			return true
+		} else {
+			return false
+		}
 	}
-	return strings.Contains(tagValue, value)
+	// split the tagValue by comma and trim the spaces, then strings.Equalfold-compare each slice-element to the given value. if any match, return true.
+	for _, v := range strings.Split(tagValue, ",") {
+		if strings.EqualFold(strings.TrimSpace(v), value) {
+			return true
+		}
+	}
+	return false
 }

@@ -18,6 +18,7 @@ machine github.com login USERNAME password PERSONAL-ACCESS-TOKEN
 
 ## VERSIONS
 
+* v0.1.9 now filter-tag values for struct field filters use lowercase trimmed string-comparisons and split values by comma beforehand allowing for more complex solutions
 * v0.1.8 much better struct filtering
 * v0.1.7 added GetStructFieldNamesByTagsValues
 * v0.1.6 added FilterStructFields
