@@ -18,6 +18,7 @@ machine github.com login USERNAME password PERSONAL-ACCESS-TOKEN
 
 ## VERSIONS
 
+* v0.1.8 much better struct filtering
 * v0.1.7 added GetStructFieldNamesByTagsValues
 * v0.1.6 added FilterStructFields
 * v0.1.5 added CopyFields in nuts.structfieldcopy.go. this is meant to be used to filter structs based on access rights.

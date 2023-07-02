@@ -2,65 +2,142 @@ package gonuts
 
 import (
 	"reflect"
+	"strings"
 )
 
-/* example usage:
+/* example usages:
 package main
+
 import (
 	"fmt"
-	"reflect"
 )
+
 type SourceStruct struct {
 	Field1 string `filter:"public"`
-	Field2 int    `filter:"private"`
-	Field3 bool   `filter:"public"`
-}
-
-type DestinationStruct struct {
-	Field1 string
-	Field3 bool
+	Field2 int    `filter:"private,admin"`
+	Field3 bool   `filter:"public,user"`
+	Field4 bool
 }
 
 func main() {
+	// filter to keep all public fields
 	source := SourceStruct{
-		Field1: "value1",
-		Field2: 42,
+		Field1: "public",
+		Field2: 2,
 		Field3: true,
+		Field4: false,
 	}
-
-	destination := createFilteredStruct(source, "public")
-
-	fmt.Printf("Destination: %+v\n", destination)
+	filtered := CreateFilteredStruct(source, []string{"public"}, nil)
+	fmt.Println("(1) filter to keep all public fields:", filtered)
+	// filter to remove all admin fields
+	source = SourceStruct{
+		Field1: "public",
+		Field2: 2,
+		Field3: true,
+		Field4: false,
+	}
+	filtered = CreateFilteredStruct(source, []string{""}, []string{"admin"})
+	fmt.Println("(2) filter to remove all admin fields and keep any others:", filtered)
+	// filter to keep all admin fields
+	source = SourceStruct{
+		Field1: "public",
+		Field2: 2,
+		Field3: true,
+		Field4: false,
+	}
+	filtered = CreateFilteredStruct(source, []string{"admin"}, nil)
+	fmt.Println("(3) filter to keep all admin fields:", filtered)
+	// filter to keep all fields with any filter value
+	source = SourceStruct{
+		Field1: "public",
+		Field2: 2,
+		Field3: true,
+		Field4: false,
+	}
+	filtered = CreateFilteredStruct(source, []string{""}, nil)
+	fmt.Println("(4) filter to keep all fields with any filter value:", filtered)
 }
+
 */
 
-// CreateFilteredStruct creates a new struct with only the fields that have the given filter value.
-// source must be a struct.
-func CreateFilteredStruct(source any, filterValue string) any {
+// @@Summary CreateFilteredStruct creates a new struct with only the fields that have any of the given filterValuesToKeep AND do not have any of the filterValuesToRemove.
+func CreateFilteredStruct(source any, filterValuesToKeep []string, filterValuesToRemove []string) any {
 	sourceType := reflect.TypeOf(source)
-	destinationType := reflect.StructOf(filterStructFields(sourceType, filterValue))
-	destination := reflect.New(destinationType).Elem()
 	sourceValue := reflect.ValueOf(source)
-	for i := 0; i < sourceType.NumField(); i++ {
-		field := sourceType.Field(i)
-		value := sourceValue.Field(i)
-		if field.Tag.Get("filter") == filterValue {
-			destinationField := destination.FieldByName(field.Name)
-			if destinationField.IsValid() && destinationField.CanSet() {
-				destinationField.Set(value)
-			}
-		}
+	destinationType := reflect.StructOf(createFilteredStructFields(sourceType, filterValuesToKeep, filterValuesToRemove))
+	destinationValue := reflect.New(destinationType).Elem()
+	for i := 0; i < destinationType.NumField(); i++ {
+		fieldName := destinationType.Field(i).Name
+		destinationValue.FieldByName(fieldName).Set(sourceValue.FieldByName(fieldName))
 	}
-	return destination.Addr().Interface()
+	return destinationValue.Interface()
 }
 
-func filterStructFields(sourceType reflect.Type, filterValue string) []reflect.StructField {
+// @@Summary CreateFilteredStructFields creates a new struct with only the fields that have any of the given filterValuesToKeep AND do not have any of the filterValuesToRemove.
+func createFilteredStructFields(sourceType reflect.Type, filterValuesToKeep []string, filterValuesToRemove []string) []reflect.StructField {
 	var filteredFields []reflect.StructField
 	for i := 0; i < sourceType.NumField(); i++ {
 		field := sourceType.Field(i)
-		if field.Tag.Get("filter") == filterValue {
+		tagMapToKeep := map[string][]string{
+			"filter": filterValuesToKeep,
+		}
+		tagMapToRemove := map[string][]string{
+			"filter": filterValuesToRemove,
+		}
+		if fieldHasTagsValues(field, tagMapToKeep, tagMapToRemove) {
 			filteredFields = append(filteredFields, field)
 		}
 	}
 	return filteredFields
+}
+
+// this function takes a struct and returns a slice of strings containing the names of the fields that have the given combination of a map[string]any with tags and values
+func GetStructFieldNamesByTagsValues(source any, tagsValues map[string][]string) []string {
+	sourceType := reflect.TypeOf(source)
+	var filteredFields []string
+	for i := 0; i < sourceType.NumField(); i++ {
+		field := sourceType.Field(i)
+		if fieldHasTagsValues(field, tagsValues, nil) {
+			filteredFields = append(filteredFields, field.Name)
+		}
+	}
+	return filteredFields
+}
+
+// @@Summary fieldHasTagsValues returns true if the field has all the given tags and values, and none of the given tags and values.
+func fieldHasTagsValues(field reflect.StructField, tagsValuesToKeep map[string][]string, tagsValuesToRemove map[string][]string) bool {
+	for tag, value := range tagsValuesToKeep {
+		found := false
+		for _, v := range value {
+			if fieldHasTagValue(field, tag, v) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	for tag, value := range tagsValuesToRemove {
+		found := false
+		for _, v := range value {
+			if fieldHasTagValue(field, tag, v) {
+				found = true
+				break
+			}
+		}
+		if found {
+			return false
+		}
+	}
+	return true
+}
+
+// @@Summary fieldHasTagValue returns true if the field has the given tag and value.
+func fieldHasTagValue(field reflect.StructField, tag string, value string) bool {
+	tagValue := field.Tag.Get(tag)
+	if tagValue == "" {
+		return false
+	}
+	return strings.Contains(tagValue, value)
 }
