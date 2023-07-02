@@ -104,6 +104,32 @@ func GetStructFieldNamesByTagsValues(source any, tagsValues map[string][]string)
 	return filteredFields
 }
 
+// this function takes a struct and returns a slice of strings containing the names of all of its fields
+func GetAllStructFieldNames(source any) []string {
+	sourceType := reflect.TypeOf(source)
+	var fieldNames []string
+	for i := 0; i < sourceType.NumField(); i++ {
+		field := sourceType.Field(i)
+		fieldNames = append(fieldNames, field.Name)
+	}
+	return fieldNames
+}
+
+// this function copies all matching fields by name and type from the source struct to the destination struct
+func CopyMatchingFields(source any, destination any) {
+	sourceType := reflect.TypeOf(source)
+	sourceValue := reflect.ValueOf(source)
+	destinationType := reflect.TypeOf(destination)
+	destinationValue := reflect.ValueOf(destination)
+	for i := 0; i < sourceType.NumField(); i++ {
+		sourceField := sourceType.Field(i)
+		destinationField, ok := destinationType.FieldByName(sourceField.Name)
+		if ok && sourceField.Type == destinationField.Type {
+			destinationValue.FieldByName(sourceField.Name).Set(sourceValue.FieldByName(sourceField.Name))
+		}
+	}
+}
+
 // @@Summary fieldHasTagsValues returns true if the field has all the given tags and values, and none of the given tags and values.
 func fieldHasTagsValues(field reflect.StructField, tagsValuesToKeep map[string][]string, tagsValuesToRemove map[string][]string) bool {
 	for tag, value := range tagsValuesToKeep {
