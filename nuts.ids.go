@@ -12,7 +12,8 @@ import (
 )
 
 // idAlphabet is the set of characters used for generating IDs.
-const idAlphabet string = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
+const idAlphabet string = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const NID_Prefix_Separator = "_"
 
 var (
 	UUIDRegEx            = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
@@ -47,7 +48,7 @@ func NanoID(prefix string) string {
 		// Fallback to using timestamp if nanoid generation fails
 		nid = strconv.FormatInt(time.Now().UnixNano(), 36)
 	}
-	return prefix + "_" + nid
+	return prefix + NID_Prefix_Separator + nid
 }
 
 // NID generates a unique ID with a specified length and optional prefix.
@@ -77,9 +78,20 @@ func NID(prefix string, length int) string {
 		nid = fallbackIDGeneration(length)
 	}
 	if prefix != "" {
-		return prefix + "_" + nid
+		return prefix + NID_Prefix_Separator + nid
 	}
 	return nid
+}
+
+// IsNID checks if the given ID is a valid NID with the specified prefix and length.
+func IsNID(id string, prefix string, length int) bool {
+	if len(id) != length {
+		return false
+	}
+	if prefix != "" {
+		return id[:len(prefix)+1] == prefix+NID_Prefix_Separator
+	}
+	return true
 }
 
 // fallbackIDGeneration creates an ID using timestamp and random bytes.
