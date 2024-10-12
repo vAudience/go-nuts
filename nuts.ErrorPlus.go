@@ -52,6 +52,31 @@ func (e *ErrorPlus) Error() string {
 	return fmt.Sprintf("%s: %s", e.msg, e.err.Error())
 }
 
+// ErrorMsg returns the error message without the original error.
+func (e *ErrorPlus) Msg() string {
+	return e.msg
+}
+
+// ErrorStr returns the error message as a string.
+func (e *ErrorPlus) ContextStr() string {
+	return GetPrettyJson(e.context)
+}
+
+// Context returns the additional context associated with the ErrorPlus.
+func (e *ErrorPlus) Context() map[string]interface{} {
+	return e.context
+}
+
+// CodeStr returns the error code as a string.
+func (e *ErrorPlus) CodeStr() string {
+	return fmt.Sprintf("%d", e.code)
+}
+
+// Code returns the error code associated with the ErrorPlus.
+func (e *ErrorPlus) Code() int {
+	return e.code
+}
+
 // Unwrap returns the underlying original error, allowing access to the original error for further handling.
 func (e *ErrorPlus) Unwrap() error {
 	return e.err
@@ -65,6 +90,16 @@ func (e *ErrorPlus) Is(target error) bool {
 // As attempts to map the ErrorPlus to a target error type, useful for type assertion.
 func (e *ErrorPlus) As(target interface{}) bool {
 	return errors.As(e.err, target)
+}
+
+// StackTrace returns the stack trace associated with the error.
+func (e *ErrorPlus) StackTrace() []string {
+	return e.stackTrace
+}
+
+// Timestamp returns the time when the error was created.
+func (e *ErrorPlus) Timestamp() time.Time {
+	return e.timestamp
 }
 
 // WithMsg returns a new ErrorPlus with the provided message, preserving immutability.
@@ -216,25 +251,3 @@ var _ interface {
 	json.Marshaler
 	// errors.Wrapper
 } = (*ErrorPlus)(nil)
-
-// Additional methods for ErrorPlus.
-
-// Code returns the error code associated with the ErrorPlus.
-func (e *ErrorPlus) Code() int {
-	return e.code
-}
-
-// Context returns a copy of the context map.
-func (e *ErrorPlus) Context() map[string]interface{} {
-	return copyContext(e.context)
-}
-
-// StackTrace returns the stack trace associated with the error.
-func (e *ErrorPlus) StackTrace() []string {
-	return e.stackTrace
-}
-
-// Timestamp returns the time when the error was created.
-func (e *ErrorPlus) Timestamp() time.Time {
-	return e.timestamp
-}
