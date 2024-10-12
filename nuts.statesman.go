@@ -7,29 +7,27 @@ import (
 	"time"
 )
 
-// StateID is a unique identifier for a state
+// StateID is a unique identifier for a state.
 type StateID string
 
-// EventID is a unique identifier for an event
+// EventID is a unique identifier for an event.
 type EventID string
 
-// Action represents a function to be executed
-type SMAction func(context interface{})
+// SMAction represents a function to be executed during state transitions.
+type SMAction func(context map[string]interface{})
 
-// Condition represents a function that returns a boolean
-type SMCondition func(context interface{}) bool
+// SMCondition represents a function that returns a boolean based on the context.
+type SMCondition func(context map[string]interface{}) bool
 
-// State represents a state in the state machine
+// State represents a state in the state machine.
 type State struct {
 	ID           StateID
 	Name         string
 	EntryActions []SMAction
 	ExitActions  []SMAction
-	ParentID     *StateID
-	Children     []StateID
 }
 
-// Transition represents a transition between states
+// Transition represents a transition between states.
 type Transition struct {
 	From      StateID
 	To        StateID
@@ -38,46 +36,48 @@ type Transition struct {
 	Actions   []SMAction
 }
 
-// TimedTransition represents a transition that occurs after a specified duration
+// TimedTransition represents a transition that occurs after a specified duration.
 type TimedTransition struct {
 	Transition
 	Duration time.Duration
 	timer    *time.Timer
 }
 
-// Region represents an orthogonal region in the state machine
-type Region struct {
-	ID           string
-	InitialState StateID
-	CurrentState StateID
+// EventData encapsulates event information passed to the state machine.
+type EventData struct {
+	EventID EventID
+	Data    map[string]interface{}
 }
 
-// StatesMan is a flexible state machine manager
+// StatesMan is a flexible, concurrent-safe state machine manager.
 type StatesMan struct {
 	Name             string
 	mu               sync.RWMutex
 	States           map[StateID]*State
 	Transitions      []Transition
 	TimedTransitions []TimedTransition
-	Regions          []Region
-	EventChannel     chan EventID
-	Context          interface{}
+	CurrentState     StateID
+	EventChannel     chan EventData
+	Context          map[string]interface{}
 	PreHooks         []SMAction
 	PostHooks        []SMAction
 }
 
-// NewStatesMan creates a new StatesMan instance
+// AnyState represents a wildcard state that matches any current state.
+const AnyState StateID = "*"
+
+// NewStatesMan creates a new StatesMan instance.
 func NewStatesMan(name string) *StatesMan {
 	return &StatesMan{
 		Name:         name,
 		States:       make(map[StateID]*State),
 		Transitions:  []Transition{},
-		Regions:      []Region{{ID: "main"}},
-		EventChannel: make(chan EventID, 10),
+		EventChannel: make(chan EventData, 10),
+		Context:      make(map[string]interface{}),
 	}
 }
 
-// AddState adds a new state to the state machine
+// AddState adds a new state to the state machine.
 func (sm *StatesMan) AddState(id StateID, name string, entryActions, exitActions []SMAction) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -89,36 +89,18 @@ func (sm *StatesMan) AddState(id StateID, name string, entryActions, exitActions
 	}
 }
 
-// AddChildState adds a child state to a parent state
-func (sm *StatesMan) AddChildState(parentID, childID StateID) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	parent, exists := sm.States[parentID]
-	if !exists {
-		return fmt.Errorf("parent state %s does not exist", parentID)
-	}
-	child, exists := sm.States[childID]
-	if !exists {
-		return fmt.Errorf("child state %s does not exist", childID)
-	}
-	parent.Children = append(parent.Children, childID)
-	child.ParentID = &parentID
-	return nil
-}
-
-// SetInitialState sets the initial state of the state machine
+// SetInitialState sets the initial state of the state machine.
 func (sm *StatesMan) SetInitialState(id StateID) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if _, exists := sm.States[id]; !exists {
 		return fmt.Errorf("state %s does not exist", id)
 	}
-	sm.Regions[0].InitialState = id
-	sm.Regions[0].CurrentState = id
+	sm.CurrentState = id
 	return nil
 }
 
-// AddTransition adds a new transition to the state machine
+// AddTransition adds a new transition to the state machine.
 func (sm *StatesMan) AddTransition(from, to StateID, event EventID, condition SMCondition, actions ...SMAction) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -131,7 +113,7 @@ func (sm *StatesMan) AddTransition(from, to StateID, event EventID, condition SM
 	})
 }
 
-// AddTimedTransition adds a new timed transition to the state machine
+// AddTimedTransition adds a new timed transition to the state machine.
 func (sm *StatesMan) AddTimedTransition(from, to StateID, duration time.Duration, actions ...SMAction) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -145,135 +127,150 @@ func (sm *StatesMan) AddTimedTransition(from, to StateID, duration time.Duration
 	})
 }
 
-// TriggerEvent triggers an event in the state machine
-func (sm *StatesMan) TriggerEvent(event EventID) {
-	sm.EventChannel <- event
+// TriggerEvent triggers an event in the state machine without knowing the next state.
+func (sm *StatesMan) TriggerEvent(event EventID, data map[string]interface{}) {
+	sm.EventChannel <- EventData{EventID: event, Data: data}
 }
 
-// AddPreHook adds a pre-transition hook
+// AddPreHook adds a pre-transition hook.
 func (sm *StatesMan) AddPreHook(hook SMAction) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.PreHooks = append(sm.PreHooks, hook)
 }
 
-// AddPostHook adds a post-transition hook
+// AddPostHook adds a post-transition hook.
 func (sm *StatesMan) AddPostHook(hook SMAction) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.PostHooks = append(sm.PostHooks, hook)
 }
 
-// Run starts the state machine
+// Run starts the state machine event loop.
 func (sm *StatesMan) Run() {
-	for event := range sm.EventChannel {
+	for eventData := range sm.EventChannel {
 		sm.mu.Lock()
-		sm.handleEvent(event)
+		sm.handleEvent(eventData)
 		sm.mu.Unlock()
 	}
 }
 
-func (sm *StatesMan) handleEvent(event EventID) {
-	for _, region := range sm.Regions {
-		currentState := sm.States[region.CurrentState]
-		for _, t := range sm.Transitions {
-			if t.From == currentState.ID && t.Event == event {
-				if t.Condition == nil || t.Condition(sm.Context) {
-					sm.executeTransition(&region, currentState, sm.States[t.To], t.Actions)
-					break
-				}
+// handleEvent processes an incoming event and executes the appropriate transition.
+func (sm *StatesMan) handleEvent(eventData EventData) {
+	currentState := sm.States[sm.CurrentState]
+	event := eventData.EventID
+	context := sm.Context
+
+	// Merge event data into context
+	for k, v := range eventData.Data {
+		context[k] = v
+	}
+
+	// Process transitions - if not found, no transition is executed - we might want to handle this case in a newer version
+	// foundTransition := false
+	for _, t := range sm.Transitions {
+		if (t.From == sm.CurrentState || t.From == AnyState) && t.Event == event {
+			if t.Condition == nil || t.Condition(context) {
+				sm.executeTransition(currentState, sm.States[t.To], t.Actions)
+				// foundTransition = true
+				break
 			}
 		}
 	}
+	// if !foundTransition {
+	// 	// Optionally handle no matching transition
+
+	// }
 	sm.checkTimedTransitions()
 }
 
-func (sm *StatesMan) executeTransition(region *Region, from, to *State, actions []SMAction) {
+// executeTransition performs the transition between states.
+func (sm *StatesMan) executeTransition(from, to *State, actions []SMAction) {
+	context := sm.Context
+
 	// Execute pre-hooks
 	for _, hook := range sm.PreHooks {
-		hook(sm.Context)
+		hook(context)
 	}
 
 	// Execute exit actions of the current state
 	for _, action := range from.ExitActions {
-		action(sm.Context)
+		action(context)
 	}
 
 	// Execute transition actions
 	for _, action := range actions {
-		action(sm.Context)
+		action(context)
 	}
 
 	// Update current state
-	region.CurrentState = to.ID
+	sm.CurrentState = to.ID
 
 	// Execute entry actions of the new state
 	for _, action := range to.EntryActions {
-		action(sm.Context)
+		action(context)
 	}
 
 	// Execute post-hooks
 	for _, hook := range sm.PostHooks {
-		hook(sm.Context)
+		hook(context)
 	}
 
 	// Reset and start timed transitions for the new state
 	sm.resetTimedTransitions(to.ID)
 }
 
+// checkTimedTransitions initializes timers for timed transitions from the current state.
 func (sm *StatesMan) checkTimedTransitions() {
-	for i, tt := range sm.TimedTransitions {
-		if tt.From == sm.Regions[0].CurrentState && tt.timer == nil {
-			sm.TimedTransitions[i].timer = time.AfterFunc(tt.Duration, func() {
+	for i := range sm.TimedTransitions {
+		tt := &sm.TimedTransitions[i]
+		if tt.From == sm.CurrentState && tt.timer == nil {
+			tt.timer = time.AfterFunc(tt.Duration, func() {
 				sm.mu.Lock()
 				defer sm.mu.Unlock()
-				sm.executeTransition(&sm.Regions[0], sm.States[tt.From], sm.States[tt.To], tt.Actions)
+				sm.executeTransition(sm.States[tt.From], sm.States[tt.To], tt.Actions)
 			})
 		}
 	}
 }
 
+// resetTimedTransitions stops existing timers and starts new ones for the given state.
 func (sm *StatesMan) resetTimedTransitions(stateID StateID) {
 	for i := range sm.TimedTransitions {
-		// Stop all existing timers
-		if sm.TimedTransitions[i].timer != nil {
-			sm.TimedTransitions[i].timer.Stop()
-			sm.TimedTransitions[i].timer = nil
+		tt := &sm.TimedTransitions[i]
+		if tt.timer != nil {
+			tt.timer.Stop()
+			tt.timer = nil
 		}
-
-		// Start new timers for transitions from the current state
-		if sm.TimedTransitions[i].From == stateID {
-			sm.TimedTransitions[i].timer = time.AfterFunc(sm.TimedTransitions[i].Duration, func() {
+		if tt.From == stateID {
+			tt.timer = time.AfterFunc(tt.Duration, func() {
 				sm.mu.Lock()
 				defer sm.mu.Unlock()
-				sm.executeTransition(&sm.Regions[0], sm.States[sm.TimedTransitions[i].From], sm.States[sm.TimedTransitions[i].To], sm.TimedTransitions[i].Actions)
+				sm.executeTransition(sm.States[tt.From], sm.States[tt.To], tt.Actions)
 			})
 		}
 	}
 }
 
-// GetCurrentState returns the current state of the state machine
+// GetCurrentState returns the current state of the state machine.
 func (sm *StatesMan) GetCurrentState() StateID {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	return sm.Regions[0].CurrentState
+	return sm.CurrentState
 }
 
-// Export exports the state machine configuration to JSON
+// Export exports the state machine configuration to JSON.
 func (sm *StatesMan) Export() (string, error) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	type exportStatesMan struct {
+	export := struct {
 		Name        string
 		States      map[StateID]*State
 		Transitions []Transition
-		Regions     []Region
-	}
-	export := exportStatesMan{
+	}{
 		Name:        sm.Name,
 		States:      sm.States,
 		Transitions: sm.Transitions,
-		Regions:     sm.Regions,
 	}
 	data, err := json.MarshalIndent(export, "", "  ")
 	if err != nil {
@@ -282,17 +279,15 @@ func (sm *StatesMan) Export() (string, error) {
 	return string(data), nil
 }
 
-// Import imports the state machine configuration from JSON
+// Import imports the state machine configuration from JSON.
 func (sm *StatesMan) Import(jsonStr string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	type importStatesMan struct {
+	var imp struct {
 		Name        string
 		States      map[StateID]*State
 		Transitions []Transition
-		Regions     []Region
 	}
-	var imp importStatesMan
 	err := json.Unmarshal([]byte(jsonStr), &imp)
 	if err != nil {
 		return err
@@ -300,11 +295,10 @@ func (sm *StatesMan) Import(jsonStr string) error {
 	sm.Name = imp.Name
 	sm.States = imp.States
 	sm.Transitions = imp.Transitions
-	sm.Regions = imp.Regions
 	return nil
 }
 
-// GenerateDOT generates a DOT representation of the state machine for visualization
+// GenerateDOT generates a DOT representation of the state machine for visualization.
 func (sm *StatesMan) GenerateDOT() string {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -319,38 +313,51 @@ func (sm *StatesMan) GenerateDOT() string {
 	return dot
 }
 
-// Example usage:
-//
-// func main() {
-//     sm := gonuts.NewStatesMan("TrafficLight")
-//
-//     sm.AddState("Red", "Red Light", []gonuts.Action{func(ctx interface{}) { fmt.Println("Red light on") }}, nil)
-//     sm.AddState("Yellow", "Yellow Light", []gonuts.Action{func(ctx interface{}) { fmt.Println("Yellow light on") }}, nil)
-//     sm.AddState("Green", "Green Light", []gonuts.Action{func(ctx interface{}) { fmt.Println("Green light on") }}, nil)
-//
-//     sm.SetInitialState("Red")
-//
-//     sm.AddTransition("Red", "Green", "Next", nil)
-//     sm.AddTransition("Green", "Yellow", "Next", nil)
-//     sm.AddTransition("Yellow", "Red", "Next", nil)
-//
-//     sm.AddTimedTransition("Green", "Yellow", 30*time.Second)
-//     sm.AddTimedTransition("Yellow", "Red", 5*time.Second)
-//
-//     sm.AddPreHook(func(ctx interface{}) { fmt.Println("About to change state") })
-//     sm.AddPostHook(func(ctx interface{}) { fmt.Println("State changed") })
-//
-//     go sm.Run()
-//
-//     for i := 0; i < 6; i++ {
-//         time.Sleep(2 * time.Second)
-//         sm.TriggerEvent("Next")
-//         fmt.Printf("Current State: %s\n", sm.GetCurrentState())
-//     }
-//
-//     jsonExport, _ := sm.Export()
-//     fmt.Println("Exported JSON:", jsonExport)
-//
-//     dotOutput := sm.GenerateDOT()
-//     fmt.Println("DOT representation:", dotOutput)
-// }
+/*
+// Example usage of the updated StatesMan.
+func exampleUsage() {
+	// Create a new state machine
+	sm := NewStatesMan("JobProcessor")
+
+	// Define states
+	sm.AddState("Idle", "Idle State", nil, nil)
+	sm.AddState("Processing", "Processing State", nil, nil)
+	sm.AddState("Completed", "Completed State", nil, nil)
+	sm.AddState("Failed", "Failed State", nil, nil)
+
+	// Set initial state
+	sm.SetInitialState("Idle")
+
+	// Define transitions
+	sm.AddTransition("Idle", "Processing", "StartProcessing", nil)
+	sm.AddTransition("Processing", "Completed", "Success", nil)
+	sm.AddTransition("Processing", "Failed", "Failure", nil)
+	// Allow any state to transition back to Idle on Reset event
+	sm.AddTransition(AnyState, "Idle", "Reset", nil)
+
+	// Start the state machine in a separate goroutine
+	go sm.Run()
+
+	// Function that starts processing
+	startProcessing := func() {
+		sm.TriggerEvent("StartProcessing", nil)
+	}
+
+	// Function that simulates job processing and triggers Success or Failure
+	processJob := func() {
+		// Simulate job processing...
+		// On success
+		sm.TriggerEvent("Success", map[string]interface{}{"result": "Job completed successfully"})
+		// On failure
+		// sm.TriggerEvent("Failure", map[string]interface{}{"error": errors.New("Job failed")})
+	}
+
+	// Start processing
+	startProcessing()
+	processJob()
+
+	// Check current state
+	currentState := sm.GetCurrentState()
+	fmt.Println("Current State:", currentState)
+}
+*/

@@ -353,7 +353,7 @@ Sample JSON output:
 
   Retrieves the timestamp when the error was created.
 
-###### Logging
+###### Logging with ErrorPlus
 
 - **`Log()`**
 
