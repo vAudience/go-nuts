@@ -120,6 +120,306 @@ Methods include:
 - `GetOrSet(key K, value V) (V, bool)`
 - `SetIfAbsent(key K, value V) bool`
 
+### Errors
+
+#### `ErrorPlus`
+
+`ErrorPlus` is an enhanced error type provided by the `gonuts` package, designed to offer robust and structured error handling in Go applications. It encapsulates the original error with additional context, error codes, stack traces, and logging integration, while ensuring immutability and thread safety.
+
+##### Key Features
+
+- **Immutability and Thread Safety**: All methods return new instances, ensuring that errors are immutable and safe to use across goroutines.
+- **Custom Error Codes**: Supports custom error codes, including HTTP status codes or application-specific codes.
+- **Contextual Data**: Allows attaching arbitrary key-value pairs to the error for additional context.
+- **Stack Trace Capture**: Automatically captures the stack trace at the point where the error is created.
+- **Logging Integration**: Seamlessly integrates with the `gonuts` logging system (`gonuts.L`) by default but allows for custom logger injection.
+- **Error Cause Chains**: Supports error wrapping and unwrapping, compatible with Go's standard error handling mechanisms.
+- **JSON Serialization**: Implements custom JSON marshaling to serialize the error, including context and stack trace.
+- **Custom Formatting**: Implements the `fmt.Formatter` interface for customizable error output.
+
+##### Creating an ErrorPlus Instance
+
+To create a new `ErrorPlus` instance, use the `NewErrorPlus` function:
+
+```go
+err := errors.New("database connection failed")
+errPlus := nuts.NewErrorPlus(err, "Unable to reach the database", 500)
+```
+
+##### Adding Contextual Information
+
+You can enrich the error with additional context using the `WithContext` method:
+
+```go
+errPlus = errPlus.WithContext("userID", 1234).
+                  WithContext("operation", "fetchUser")
+```
+
+Each call to `WithContext` returns a new `ErrorPlus` instance, preserving immutability.
+
+##### Using Helper Functions for Common HTTP Errors
+
+`ErrorPlus` provides helper functions to create errors with common HTTP status codes:
+
+- `NewNotFoundError(msg string, err error) *ErrorPlus`
+- `NewInternalError(msg string, err error) *ErrorPlus`
+- `NewUnauthorizedError(msg string, err error) *ErrorPlus`
+- `NewBadRequestError(msg string, err error) *ErrorPlus`
+
+Example:
+
+```go
+err := errors.New("resource not found")
+errPlus := nuts.NewNotFoundError("User does not exist", err)
+```
+
+##### Logging the Error
+
+By default, `ErrorPlus` uses the `gonuts.L` logger for logging:
+
+```go
+errPlus.Log()
+```
+
+You can inject a custom logger if needed:
+
+```go
+customLogger := zap.NewExample().Sugar()
+nuts.SetErrorLogger(customLogger)
+errPlus.Log()
+```
+
+##### Accessing Error Information
+
+- **Error Message**: `errPlus.Error()`
+- **Error Code**: `errPlus.Code()`
+- **Context**: `errPlus.Context()`
+- **Stack Trace**: `errPlus.StackTrace()`
+- **Timestamp**: `errPlus.Timestamp()`
+
+Example:
+
+```go
+fmt.Println("Error Code:", errPlus.Code())
+fmt.Println("Context:", errPlus.Context())
+fmt.Println("Stack Trace:", errPlus.StackTrace())
+```
+
+##### Compatibility with Standard Error Handling
+
+`ErrorPlus` is fully compatible with Go's standard error handling mechanisms:
+
+- **Unwrapping Errors**:
+
+  ```go
+  if errors.Is(errPlus, sql.ErrNoRows) {
+      // Handle "no rows" error
+  }
+  ```
+
+- **Type Assertions**:
+
+  ```go
+  var pathError *os.PathError
+  if errors.As(errPlus, &pathError) {
+      // Handle specific path-related error
+  }
+  ```
+
+##### Custom Formatting
+
+`ErrorPlus` implements the `fmt.Formatter` interface, allowing for detailed formatting:
+
+- **Default Format** (`%v` or `%s`):
+
+  ```go
+  fmt.Printf("%v\n", errPlus)
+  // Output: Unable to reach the database: database connection failed
+  ```
+
+- **Detailed Format** (`%+v`):
+
+  ```go
+  fmt.Printf("%+v\n", errPlus)
+  /* Output:
+  ErrorPlus:
+    Msg: Unable to reach the database
+    Code: 500
+    Error: database connection failed
+    Context: map[userID:1234 operation:fetchUser]
+    StackTrace:
+  main.main
+      /path/to/your/app/main.go:25
+  runtime.main
+      /usr/local/go/src/runtime/proc.go:225
+  */
+  ```
+
+##### JSON Serialization
+
+`ErrorPlus` can be serialized to JSON, including all its fields:
+
+```go
+jsonData, err := json.Marshal(errPlus)
+if err != nil {
+    // Handle serialization error
+}
+fmt.Println(string(jsonData))
+```
+
+Sample JSON output:
+
+```json
+{
+  "msg": "Unable to reach the database",
+  "code": 500,
+  "context": {
+    "userID": 1234,
+    "operation": "fetchUser"
+  },
+  "stackTrace": [
+    "main.main\n\t/path/to/your/app/main.go:25",
+    "runtime.main\n\t/usr/local/go/src/runtime/proc.go:225"
+  ],
+  "timestamp": "2023-10-10T14:48:00Z",
+  "error": "database connection failed"
+}
+```
+
+##### Full API Reference
+
+###### Creation Methods
+
+- **`NewErrorPlus(err error, msg string, code int) *ErrorPlus`**
+
+  Creates a new `ErrorPlus` instance with the given error, message, and code.
+
+- **Helper Functions for Common Errors**
+
+  - `NewNotFoundError(msg string, err error) *ErrorPlus`
+  - `NewInternalError(msg string, err error) *ErrorPlus`
+  - `NewUnauthorizedError(msg string, err error) *ErrorPlus`
+  - `NewBadRequestError(msg string, err error) *ErrorPlus`
+
+###### Modifier Methods (Immutable)
+
+- **`WithMsg(msg string) *ErrorPlus`**
+
+  Returns a new `ErrorPlus` instance with the updated message.
+
+- **`WithCode(code int) *ErrorPlus`**
+
+  Returns a new `ErrorPlus` instance with the updated code.
+
+- **`WithContext(key string, value interface{}) *ErrorPlus`**
+
+  Returns a new `ErrorPlus` instance with additional context.
+
+- **`WithValues(msg string, code int) *ErrorPlus`**
+
+  Returns a new `ErrorPlus` instance with updated message and code.
+
+###### Accessor Methods
+
+- **`Error() string`**
+
+  Implements the `error` interface.
+
+- **`Unwrap() error`**
+
+  Returns the underlying error.
+
+- **`Is(target error) bool`**
+
+  Checks if the target error matches the underlying error.
+
+- **`As(target interface{}) bool`**
+
+  Attempts to map the `ErrorPlus` to a target error type.
+
+- **`Code() int`**
+
+  Retrieves the error code.
+
+- **`Context() map[string]interface{}`**
+
+  Retrieves a copy of the context map.
+
+- **`StackTrace() []string`**
+
+  Retrieves the captured stack trace.
+
+- **`Timestamp() time.Time`**
+
+  Retrieves the timestamp when the error was created.
+
+###### Logging
+
+- **`Log()`**
+
+  Logs the error using the configured logger.
+
+- **`SetErrorLogger(logger *zap.SugaredLogger)`**
+
+  Sets a custom logger for all `ErrorPlus` instances.
+
+###### Formatting and Serialization
+
+- **`Format(f fmt.State, c rune)`**
+
+  Implements the `fmt.Formatter` interface for custom formatting.
+
+- **`MarshalJSON() ([]byte, error)`**
+
+  Implements the `json.Marshaler` interface for JSON serialization.
+
+##### Usage Example
+
+```go
+package main
+
+import (
+    "database/sql"
+    "errors"
+    "fmt"
+
+    nuts "github.com/vaudience/go-nuts"
+)
+
+func main() {
+    // Simulate a database error
+    baseErr := sql.ErrNoRows
+
+    // Create an ErrorPlus instance
+    errPlus := nuts.NewNotFoundError("User not found in the database", baseErr).
+        WithContext("userID", 1234).
+        WithContext("operation", "fetchUser")
+
+    // Log the error
+    errPlus.Log()
+
+    // Check if the error is a sql.ErrNoRows
+    if errors.Is(errPlus, sql.ErrNoRows) {
+        fmt.Println("Handle the 'no rows' error")
+    }
+
+    // Print the error with detailed formatting
+    fmt.Printf("%+v\n", errPlus)
+}
+```
+
+##### Notes and Best Practices
+
+- **Immutability**: All modifier methods return new instances to ensure thread safety and prevent side effects.
+- **Contextual Information**: Use the `WithContext` method to add valuable debugging information.
+- **Error Chaining**: Utilize `Unwrap`, `Is`, and `As` to interact with the underlying error.
+- **Logging**: Leverage the `Log` method to integrate error logging seamlessly.
+- **JSON Serialization**: Be cautious when deserializing errors, as the original error type may not be fully reconstructed.
+
+##### Integration with Other `gonuts` Features
+
+`ErrorPlus` is designed to work harmoniously with other utilities provided by the `gonuts` package. For instance, you can use `ErrorPlus` alongside the `EventEmitter` for emitting errors or within `StateMan` for state transition errors.
+
 ### State Management
 
 #### `StatesMan`
