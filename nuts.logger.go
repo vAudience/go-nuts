@@ -12,8 +12,11 @@ import (
 
 // CHECK https://stackoverflow.com/questions/68472667/how-to-log-to-stdout-or-stderr-based-on-log-level-using-uber-go-zap
 func Init_Logger(targetLevel zapcore.Level, instanceId string, log2file bool, logfilePath string) *zap.SugaredLogger {
-	// fmt.Printf("[nuts.logger] adding logfile: (%s)(%t)(%s)", instanceId, log2file, logfilePath)
-	var LogConfig = zap.NewDevelopmentConfig()
+	var LogConfig = zap.NewProductionConfig()
+	if targetLevel == zap.DebugLevel {
+		LogConfig.Development = true
+	}
+	LogConfig.Encoding = "console"
 	LogConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	LogConfig.EncoderConfig.EncodeTime = SyslogTimeEncoder
 	LogConfig.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
@@ -25,7 +28,6 @@ func Init_Logger(targetLevel zapcore.Level, instanceId string, log2file bool, lo
 			fmt.Printf("[nuts.logger] adding logfile: (%s)", logfileName)
 		}
 	}
-	// LogConfig.Level.SetLevel(zap.DebugLevel)
 	logger, err := LogConfig.Build()
 	if err != nil {
 		fmt.Printf("[nuts.logger] ERROR! failed to create logger PANIC! \n%s", err)
