@@ -68,7 +68,7 @@ var (
 //   - "**/test/**"
 
 func LoadConfigFromYAML(filename string) (*MarkdownGeneratorConfig, error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error reading YAML file: %w", err)
 	}
