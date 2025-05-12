@@ -2,7 +2,6 @@ package gonuts
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -224,7 +223,7 @@ func generateMarkdownContent(files []string, config *MarkdownGeneratorConfig) st
 		relPath, _ := filepath.Rel(*config.BaseDir, file)
 		sb.WriteString(fmt.Sprintf("%s %s\n\n", strings.Repeat("#", *config.BaseHeaderLevel+1), relPath))
 
-		content, err := ioutil.ReadFile(filepath.Join(*config.BaseDir, file))
+		content, err := os.ReadFile(filepath.Join(*config.BaseDir, file))
 		if err != nil {
 			sb.WriteString(fmt.Sprintf("Error reading file: %s\n\n", err))
 			continue
