@@ -4,28 +4,42 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
+const (
+	GO_NUTS_LOGGER_CONFIG      = "GO_NUTS_LOGGER_CONFIG"
+	GO_NUTS_LOGGER_CONFIG_PROD = "prod"
+)
+
 // CHECK https://stackoverflow.com/questions/68472667/how-to-log-to-stdout-or-stderr-based-on-log-level-using-uber-go-zap
 func Init_Logger(targetLevel zapcore.Level, instanceId string, log2file bool, logfilePath string) *zap.SugaredLogger {
-	// fmt.Printf("[nuts.logger] adding logfile: (%s)(%t)(%s)", instanceId, log2file, logfilePath)
-	var LogConfig = zap.NewDevelopmentConfig()
+	var LogConfig zap.Config
+
+	// Set default log config
+	LogConfig = zap.NewDevelopmentConfig()
 	LogConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	LogConfig.EncoderConfig.EncodeTime = SyslogTimeEncoder
 	LogConfig.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 	LogConfig.Level = zap.NewAtomicLevelAt(targetLevel)
-	if log2file {
-		if logfilePath != "" {
-			logfileName := logfilePath + "log_" + time.Now().Format("2006-01-02T15:04:05Z07:00") + "_" + instanceId + ".txt"
-			LogConfig.OutputPaths = append(LogConfig.OutputPaths, logfileName)
-			fmt.Printf("[nuts.logger] adding logfile: (%s)", logfileName)
-		}
+
+	// Set production log config based on environment variable
+	loggerConfig, ok := os.LookupEnv(GO_NUTS_LOGGER_CONFIG)
+	if ok && loggerConfig == GO_NUTS_LOGGER_CONFIG_PROD {
+		LogConfig = zap.NewProductionConfig()
+		LogConfig.Level = zap.NewAtomicLevelAt(targetLevel)
 	}
-	// LogConfig.Level.SetLevel(zap.DebugLevel)
+
+	if log2file && logfilePath != "" {
+		logfileName := logfilePath + "log_" + time.Now().Format("2006-01-02T15:04:05Z07:00") + "_" + instanceId + ".txt"
+		LogConfig.OutputPaths = append(LogConfig.OutputPaths, logfileName)
+		fmt.Printf("[nuts.logger] adding logfile: (%s)", logfileName)
+	}
+
 	logger, err := LogConfig.Build()
 	if err != nil {
 		fmt.Printf("[nuts.logger] ERROR! failed to create logger PANIC! \n%s", err)

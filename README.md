@@ -85,6 +85,10 @@ Example:
 nuts.SetLoglevel("DEBUG", "myapp", true, "/var/log/myapp/")
 ```
 
+#### Production Configuration
+
+Set `GO_NUTS_LOGGER_CONFIG` environment variable to `prod` to enable production logging configuration.
+
 #### `SyslogTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder)`
 
 A custom time encoder for the logger that formats time in syslog format.
