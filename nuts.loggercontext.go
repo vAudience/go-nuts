@@ -8,6 +8,7 @@ import (
 
 const (
 	RequestIdFieldKey     = "requestId"
+	RequestOrgIdFieldKey  = "requestOrgId"
 	RequestUserIdFieldKey = "requestUserId"
 	requestIdPrefix       = "rid"
 	requestIdLength       = 16
@@ -17,6 +18,7 @@ type ctxKey int
 
 const (
 	requestIdCtxKey ctxKey = iota
+	requestOrgIdCtxKey
 	requestUserIdCtxKey
 )
 
@@ -26,6 +28,10 @@ func GenerateRequestId() string {
 
 func NewContextWithRequestId(ctx context.Context, requestId string) context.Context {
 	return context.WithValue(ctx, requestIdCtxKey, requestId)
+}
+
+func NewContextWithRequestOrgId(ctx context.Context, requestOrgId string) context.Context {
+	return context.WithValue(ctx, requestOrgIdCtxKey, requestOrgId)
 }
 
 func NewContextWithRequestUserId(ctx context.Context, requestUserId string) context.Context {
@@ -43,6 +49,17 @@ func RequestIdFromContext(ctx context.Context) string {
 	return requestId
 }
 
+func RequestOrgIdFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	requestOrgId, ok := ctx.Value(requestOrgIdCtxKey).(string)
+	if !ok {
+		return ""
+	}
+	return requestOrgId
+}
+
 func RequestUserIdFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -54,6 +71,26 @@ func RequestUserIdFromContext(ctx context.Context) string {
 	return requestUserId
 }
 
+func LoggerFieldsFromContext(ctx context.Context) []zap.Field {
+	fields := make([]zap.Field, 0)
+
+	requestId := RequestIdFromContext(ctx)
+	if requestId != "" {
+		fields = append(fields, zap.String(RequestIdFieldKey, requestId))
+	}
+
+	requestOrgId := RequestOrgIdFromContext(ctx)
+	if requestOrgId != "" {
+		fields = append(fields, zap.String(RequestOrgIdFieldKey, requestOrgId))
+	}
+
+	requestUserId := RequestUserIdFromContext(ctx)
+	if requestUserId != "" {
+		fields = append(fields, zap.String(RequestUserIdFieldKey, requestUserId))
+	}
+	return fields
+}
+
 func NewLoggerFromContext(ctx context.Context, logger *zap.SugaredLogger) *zap.SugaredLogger {
 	if logger == nil {
 		logger = L
@@ -62,6 +99,11 @@ func NewLoggerFromContext(ctx context.Context, logger *zap.SugaredLogger) *zap.S
 	requestId := RequestIdFromContext(ctx)
 	if requestId != "" {
 		logger = logger.With(RequestIdFieldKey, requestId)
+	}
+
+	requestOrgId := RequestOrgIdFromContext(ctx)
+	if requestOrgId != "" {
+		logger = logger.With(RequestOrgIdFieldKey, requestOrgId)
 	}
 
 	requestUserId := RequestUserIdFromContext(ctx)

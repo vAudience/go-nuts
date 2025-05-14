@@ -5,7 +5,7 @@ import "go.uber.org/zap/zapcore"
 var L = Init_Logger(zapcore.DebugLevel, "unknown", false, "logs/")
 
 // @title gonuts package
-// @version 0.3.5
+// @version 0.3.6
 // @description a weird collection of little helpers. take anything you want from them.
 
 // @contact.name Toni
